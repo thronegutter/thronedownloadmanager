@@ -185,7 +185,8 @@ MDM follows your system: when Windows (or your desktop's light/dark preference o
 
 **View → Theme** changes MDM's look at once, keeping its layout:
 
-- **Classic**: MDM's own look, the default.
+- **Throne Blue** is the default on a fresh profile. It pairs blue accents with a graphite title bar.
+- **Classic** is MDM's original look.
 - **Native**: your system's colours. Windows' accent colour (Settings → Personalization →
   Colors) and, when it is on, its contrast theme; the desktop's accent colour and its higher
   contrast setting on Linux (GNOME 47 and later, KDE Plasma); the accent colour on macOS. It

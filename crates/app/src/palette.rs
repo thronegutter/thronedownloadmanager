@@ -606,7 +606,7 @@ impl Theme {
     }
 }
 
-/// The classic look, MDM's default.
+/// The original Mister Download Manager look.
 pub static CLASSIC: Theme = Theme {
     id: Cow::Borrowed("classic"),
     name: Cow::Borrowed("Classic"),
@@ -618,11 +618,17 @@ pub static CLASSIC: Theme = Theme {
     controls: Controls::CLASSIC,
 };
 
-/// The built-in themes that don't change by themselves, the default first: the classic look
-/// (written out above), then the ones shipped as theme files (`assets/themes/`, in the format
-/// users write, so they double as examples). Native follows the system and is made when chosen
-/// (`crate::native`).
-pub fn builtins() -> [&'static Theme; 8] {
+/// The theme used on the first launch of Throne Download Manager.
+pub static THRONE_BLUE: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
+    crate::themefile::builtin(
+        "throne-blue",
+        include_str!("../assets/themes/throne-blue.toml"),
+    )
+});
+
+/// The built-in themes that don't change by themselves, including the ones shipped as theme
+/// files (`assets/themes/`). Native follows the system and is made when chosen (`crate::native`).
+pub fn builtins() -> [&'static Theme; 9] {
     static HIGH_CONTRAST: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
         crate::themefile::builtin(
             "high-contrast",
@@ -657,6 +663,7 @@ pub fn builtins() -> [&'static Theme; 8] {
         &LUNA,
         &AERO,
         &AQUA,
+        &THRONE_BLUE,
     ]
 }
 
@@ -859,6 +866,11 @@ mod tests {
             ("luna", "Luna", include_str!("../assets/themes/luna.toml")),
             ("aero", "Aero", include_str!("../assets/themes/aero.toml")),
             ("aqua", "Aqua", include_str!("../assets/themes/aqua.toml")),
+            (
+                "throne-blue",
+                "Throne Blue",
+                include_str!("../assets/themes/throne-blue.toml"),
+            ),
         ] {
             let v: serde_json::Value = toml::from_str(text).unwrap();
             let l = crate::themefile::parse(id, &v, |_| {

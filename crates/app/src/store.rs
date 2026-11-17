@@ -51,15 +51,22 @@ pub fn path() -> Option<PathBuf> {
 
 /// Load the list; a missing file gives an empty list, a damaged one is kept aside.
 pub fn load() -> Loaded {
-    let empty = Loaded {
+    let empty = empty();
+    let Some(p) = path() else { return empty };
+    load_from(&p, empty)
+}
+
+fn empty() -> Loaded {
+    Loaded {
         next_id: 1,
         items: Vec::new(),
         columns: None,
-        settings: Settings::default(),
+        settings: Settings {
+            theme: crate::palette::THRONE_BLUE.id.to_string(),
+            ..Settings::default()
+        },
         queues: Vec::new(),
-    };
-    let Some(p) = path() else { return empty };
-    load_from(&p, empty)
+    }
 }
 
 /// Only the settings, read without touching anything (the command line's debrid accounts,
@@ -391,14 +398,21 @@ impl Saver {
 mod tests {
     use super::*;
 
-    fn empty() -> Loaded {
-        Loaded {
-            next_id: 1,
-            items: Vec::new(),
-            columns: None,
-            settings: Settings::default(),
-            queues: Vec::new(),
-        }
+    #[test]
+    fn new_profiles_start_in_throne_blue() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("downloads.json");
+        assert_eq!(load_from(&p, empty()).settings.theme, "throne-blue");
+
+        std::fs::write(
+            &p,
+            r#"{"next_id":1,"items":[],"settings":{"theme":"metro"}}"#,
+        )
+        .unwrap();
+        assert_eq!(load_from(&p, empty()).settings.theme, "metro");
+
+        std::fs::write(&p, r#"{"next_id":1,"items":[],"settings":{}}"#).unwrap();
+        assert_eq!(load_from(&p, empty()).settings.theme, "classic");
     }
 
     #[test]
