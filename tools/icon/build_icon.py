@@ -1,13 +1,6 @@
-"""Builds every app icon size from art/Mister Download Manager.png (made with ChatGPT).
+"""Build the desktop and browser extension icon sizes from their artwork in art/.
 
-- 48 px and up: the full artwork (globe, hat, moustache, arrow and pixel trail).
-- 16-32 px: a tighter crop on the globe, hat and moustache; the fine trail and thin arrow
-  tail turn to noise at small sizes.
-- The source's solid areas are ~1 % transparent (alpha 252-253); they are made opaque so
-  the taskbar never shows through.
-
-Writes crates/app/assets/icons/app/mdm-<size>.png, MDM.ico (all sizes) and the
-browser extension's icons. Run from the repository root: python -I tools/icon/build_icon.py
+Run from the repository root: python -I tools/icon/build_icon.py
 """
 
 from pathlib import Path
@@ -15,11 +8,12 @@ from pathlib import Path
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[2]
-SRC = ROOT / "art" / "Mister Download Manager.png"
+APP_SRC = ROOT / "art" / "Throne Download Manager.png"
+EXT_SRC = ROOT / "art" / "Mister Download Manager.png"
 APP = ROOT / "crates" / "app" / "assets" / "icons" / "app"
 EXT = ROOT / "extension" / "icons"
 SIZES = [16, 20, 24, 32, 48, 64, 128, 256]
-# The globe + hat + moustache, in source pixels (left, top, right, bottom).
+# The original artwork's globe, hat and moustache, in source pixels.
 TIGHT = (330, 60, 1160, 1110)
 
 
@@ -37,26 +31,33 @@ def square(im: Image.Image, box, pad: float) -> Image.Image:
     return out
 
 
-def main() -> None:
-    src = opaque(Image.open(SRC).convert("RGBA"))
-    bbox = src.split()[3].point(lambda v: 255 if v > 16 else 0).getbbox()
-    full = square(src, bbox, 0.02)
-    tight = square(src, TIGHT, 0.0)
+def build_app() -> None:
+    with Image.open(APP_SRC) as source:
+        app = source.convert("RGBA")
     icons = {}
     for size in SIZES:
-        base = tight if size <= 32 else full
-        icons[size] = base.resize((size, size), Image.LANCZOS)
+        icons[size] = app.resize((size, size), Image.LANCZOS)
         icons[size].save(APP / f"mdm-{size}.png")
-    big = icons[256]
-    big.save(
+    icons[256].save(
         APP / "mdm.ico",
         sizes=[(s, s) for s in SIZES],
         append_images=[icons[s] for s in SIZES if s != 256],
     )
+
+
+def build_extension() -> None:
+    # Make the original artwork's nearly opaque fills solid.
+    with Image.open(EXT_SRC) as source:
+        src = opaque(source.convert("RGBA"))
+    bbox = src.getchannel("A").point(lambda v: 255 if v > 16 else 0).getbbox()
+    full = square(src, bbox, 0.02)
+    tight = square(src, TIGHT, 0.0)
     for size in (16, 32, 48, 128):
-        icons[size].save(EXT / f"icon-{size}.png")
-    print("wrote", ", ".join(str(s) for s in SIZES), "+ mdm.ico + extension icons")
+        base = tight if size <= 32 else full
+        base.resize((size, size), Image.LANCZOS).save(EXT / f"icon-{size}.png")
 
 
 if __name__ == "__main__":
-    main()
+    build_app()
+    build_extension()
+    print("wrote", ", ".join(str(s) for s in SIZES), "+ mdm.ico + extension icons")

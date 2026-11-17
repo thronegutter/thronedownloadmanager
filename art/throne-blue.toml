@@ -1,0 +1,41 @@
+name = "Throne Blue"
+inherits = "classic"
+icons = "accent"
+icon-set = "metro"
+
+[seeds.light]
+background = "#EDF2F8"
+surface = "#FFFFFF"
+header = "#F5F8FC"
+text = "#141A24"
+accent = "#1458BD"
+selection = "#D6E7FF"
+
+[seeds.dark]
+background = "#11151D"
+surface = "#17202C"
+header = "#1C2838"
+text = "#F1F5FC"
+accent = "#66ACFF"
+selection = "#213E66"
+
+[colors]
+caption = "#0D1119"
+"caption.text" = "#F1F5FC"
+"caption.text.inactive" = "#B8C6D9"
+"caption.hot" = "#66ACFF33"
+"caption.pressed" = "#66ACFF55"
+
+[light]
+"progress.bar" = "#1458BD"
+
+[dark]
+"progress.bar" = "#66ACFF"
+
+[sizes]
+radius = 6
+
+[controls]
+caption = "metro"
+focus = "ring"
+progress = "bar"
