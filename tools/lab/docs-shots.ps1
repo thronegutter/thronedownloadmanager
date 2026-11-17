@@ -148,7 +148,7 @@ function Follow {
   Write-Warning "MDM started again (pid $($n.ProcessId)); the shots go on there"
   $script:app = Get-Process -Id $n.ProcessId
   Start-Sleep 4
-  $script:main = @(Titles $script:app.Id | Where-Object { $_ -like "Mister Download Manager*" })[0]
+  $script:main = @(Titles $script:app.Id | Where-Object { $_ -eq "Throne Download Manager" })[0]
 }
 $srv = $null; $app = $null
 try {
@@ -183,7 +183,7 @@ try {
   if ($At) { $env:MDM_OFFSCREEN_AT = $At }
   $app = Start-Process -PassThru $Exe
   Start-Sleep 3
-  $main = @(Titles $app.Id | Where-Object { $_ -like "Mister Download Manager*" })[0]
+  $main = @(Titles $app.Id | Where-Object { $_ -eq "Throne Download Manager" })[0]
 
   # A list that looks used: finished files, one still coming in (rate-limited: the rate is per
   # connection, so 256K over its 8 connections is about 2 MB/sec).
@@ -201,11 +201,11 @@ try {
   # the main window.
   for ($i = 0; $i -lt 25; $i++) {
     Start-Sleep 1
-    [DS]::Of([uint32]$app.Id) | Where-Object { $_.Value -notlike "Mister Download Manager*" } |
+    [DS]::Of([uint32]$app.Id) | Where-Object { $_.Value -ne "Throne Download Manager" } |
       ForEach-Object { [DS]::PostMessage($_.Key, 0x10, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null }
   }
   Start-Sleep 2
-  $main = @(Titles $app.Id | Where-Object { $_ -like "Mister Download Manager*" })[0]
+  $main = @(Titles $app.Id | Where-Object { $_ -eq "Throne Download Manager" })[0]
 
   # Each window opened by name through the app's own command line (/show, mdm_ipc), so no
   # click or key ever goes to the screen. name = /show argument. These are the README's and the
