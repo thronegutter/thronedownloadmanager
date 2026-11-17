@@ -11,11 +11,13 @@ pub const STORE_ID: &str = "ejoleppdfgjdndddcjoehopknmlglojp";
 /// Its IDs in Microsoft Edge Add-ons and Opera add-ons, which give their own; placeholders until
 /// listed there, never served then (`valid_id`).
 pub const OTHER_STORE_IDS: [&str; 2] = ["EDGE_ADDONS_ID_PENDING", "OPERA_ADDONS_ID_PENDING"];
-/// The Firefox add-on's page on addons.mozilla.org (listed: Firefox installs and updates it from
-/// there).
-pub const FIREFOX_PAGE: &str = "https://addons.mozilla.org/firefox/addon/mister-download-manager/";
+/// Firefox's instructions for loading the development add-on.
+pub const FIREFOX_SETUP: &str =
+    "https://extensionworkshop.com/documentation/develop/temporary-installation-in-firefox/";
 /// The Firefox add-on's ID (extension/manifest.firefox.json).
-pub const FIREFOX_ID: &str = "integration@misterdownloadmanager.com";
+pub const FIREFOX_ID: &str = "thronedownloadmanager@thronegutter.github.io";
+/// The Firefox add-on's native host, as named in the Firefox package's background script.
+pub const FIREFOX_HOST_NAME: &str = "com.thronedownloadmanager.host";
 /// Chrome's update service: an external-install entry naming it makes Chrome offer the store's
 /// extension at its next start (developer.chrome.com, "Alternative extension distribution
 /// options").

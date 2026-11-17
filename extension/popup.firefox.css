@@ -1,0 +1,27 @@
+/* Throne Blue colors for the Firefox popup. */
+:root {
+  --bg: #edf2f8;
+  --text: #141a24;
+  --muted: #425369;
+  --edge: #c1cedf;
+  --field: #ffffff;
+  --accent: #1458bd;
+  --accent-text: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #11151d;
+    --text: #f1f5fc;
+    --muted: #b8c6d9;
+    --edge: #3d506a;
+    --field: #17202c;
+    --accent: #66acff;
+    --accent-text: #0d1119;
+  }
+}
+header {
+  margin: -12px -14px 10px;
+  padding: 10px 14px;
+  background: #0d1119;
+  color: #f1f5fc;
+}

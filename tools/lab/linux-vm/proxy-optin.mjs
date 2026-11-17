@@ -8,7 +8,7 @@ import path from "node:path";
 import { spawn, execFileSync } from "node:child_process";
 
 const xpi = path.resolve(process.argv[2]);
-const ID = "integration@misterdownloadmanager.com";
+const ID = "thronedownloadmanager@thronegutter.github.io";
 const UUID = "5d0c3b8e-7a51-4c1e-9f0a-38e2c4a1d7b6";
 const NL = String.fromCharCode(10);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

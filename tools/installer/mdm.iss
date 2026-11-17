@@ -131,6 +131,7 @@ Filename: "{app}\{#HostExe}"; Parameters: "--unregister --all-users"; Flags: run
 
 [UninstallDelete]
 Type: files; Name: "{app}\com.misterdownloadmanager.host*.json"
+Type: files; Name: "{app}\com.thronedownloadmanager.host.json"
 
 [Code]
 const

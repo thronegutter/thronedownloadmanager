@@ -31,6 +31,16 @@ pub enum Family {
     Gecko,
 }
 
+impl Family {
+    /// The native messaging manifest file for this family.
+    pub fn host_manifest(self) -> String {
+        match self {
+            Self::Chromium => HOST_MANIFEST.to_owned(),
+            Self::Gecko => format!("{}.json", crate::extension::FIREFOX_HOST_NAME),
+        }
+    }
+}
+
 /// A browser MDM knows by name.
 #[derive(Debug)]
 pub struct Browser {
@@ -378,7 +388,7 @@ pub fn windows_can_run_extension(program: &str) -> bool {
     !program.to_lowercase().ends_with("iexplore.exe")
 }
 
-/// The host manifest's file name, in every folder.
+/// The Chromium host manifest's file name.
 pub const HOST_MANIFEST: &str = "com.misterdownloadmanager.host.json";
 
 /// Linux and macOS (`mac`): the folders to write the host manifest into, each with the family
@@ -443,7 +453,7 @@ fn host_dirs_in(
         !mac && host.is_some_and(|host| {
             b.linux_system
                 .iter()
-                .any(|d| names_program(&system(d).join(HOST_MANIFEST), host))
+                .any(|d| names_program(&system(d).join(b.family.host_manifest()), host))
         })
     };
     let support = home.join("Library/Application Support");
@@ -833,11 +843,11 @@ mod tests {
         std::fs::create_dir_all(helper.parent().unwrap()).unwrap();
         std::fs::write(&helper, "#!/bin/sh\n").unwrap();
         std::fs::set_permissions(&helper, std::fs::Permissions::from_mode(0o755)).unwrap();
-        let system = |d: &str, program: &Path| {
+        let system = |d: &str, family: Family, program: &Path| {
             let dir = root.join(d.trim_start_matches('/'));
             std::fs::create_dir_all(&dir).unwrap();
             let json = serde_json::json!({ "name": "x", "path": program, "type": "stdio" });
-            std::fs::write(dir.join(HOST_MANIFEST), json.to_string()).unwrap();
+            std::fs::write(dir.join(family.host_manifest()), json.to_string()).unwrap();
         };
         let dirs = |host: Option<&Path>| -> Vec<PathBuf> {
             host_dirs_in(&root, &home, &home.join(".config"), false, false, host)
@@ -853,12 +863,12 @@ mod tests {
         assert_eq!(dirs(Some(&helper)), all(&[chrome, brave, opera, mozilla]));
 
         // Chrome's for everyone: Chrome and Brave read it, Opera doesn't.
-        system(ETC_CHROME, &helper);
+        system(ETC_CHROME, Family::Chromium, &helper);
         assert_eq!(dirs(Some(&helper)), all(&[opera, mozilla]));
         // Unregistering (no helper given) still sees every user folder.
         assert_eq!(dirs(None), all(&[chrome, brave, opera, mozilla]));
         // Firefox's, in lib64 (Fedora's).
-        system(MOZILLA[1], &helper);
+        system(MOZILLA[1], Family::Gecko, &helper);
         assert_eq!(dirs(Some(&helper)), all(&[opera]));
         // Zen reads only Mozilla's user folder: it stays.
         std::fs::create_dir_all(home.join(".zen")).unwrap();

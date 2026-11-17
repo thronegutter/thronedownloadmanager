@@ -44,7 +44,7 @@ CONTENT = WEB / "content"
 OUT = ROOT / "target" / "site"
 SITE = "https://misterdownloadmanager.com"
 REPO = "https://github.com/anefzaoui/misterdownloadmanager"
-# The Firefox add-on's listing (crates/ipc/src/extension.rs FIREFOX_PAGE): {{AMO}} in pages, and
+# The upstream Firefox add-on's listing: {{AMO}} in pages, and
 # <!--@amo--> for its Add to Firefox button.
 AMO = "https://addons.mozilla.org/firefox/addon/mister-download-manager/"
 # The extension's listing in the Chrome Web Store (crates/ipc/src/extension.rs STORE_ID), for

@@ -172,7 +172,6 @@ pub fn update_run_at_startup() {
 /// The browsers' helper program (crates/nmhost), beside this one.
 const HOST: &str = "misterdownloadmanager-nmhost";
 /// The manifest it writes in each browser's folder.
-const MANIFEST: &str = "com.misterdownloadmanager.host.json";
 /// How long the helper's `--register` has at a start (it writes a few small files).
 const REGISTER_LIMIT: std::time::Duration = std::time::Duration::from_secs(20);
 /// Why the last registration failed, in the system's words (Test browser integration says it);
@@ -358,8 +357,8 @@ fn registration_in(
     // A browser reads its user folder's manifest first: each must be there and name a helper
     // that runs. Everyone's folders: one that works is enough.
     let (mut ready, mut missing, mut broken) = (0, 0, None);
-    for (dir, _) in dirs {
-        let manifest = dir.join(MANIFEST);
+    for (dir, family) in dirs {
+        let manifest = dir.join(family.host_manifest());
         if !manifest.is_file() {
             missing += 1;
             continue;
@@ -2225,7 +2224,7 @@ ID_LIKE=arch
 
 #[cfg(test)]
 mod host_copy_tests {
-    use super::{HOST, MANIFEST, install_host_copy, registration_in, runs};
+    use super::{HOST, install_host_copy, registration_in, runs};
     use crate::extension::Registration;
     use mdm_ipc::browsers::Family;
     use std::path::Path;
@@ -2325,15 +2324,15 @@ mod host_copy_tests {
         for d in [&a, &b] {
             std::fs::create_dir_all(d).unwrap();
         }
-        let write = |dir: &Path, path: &Path| {
+        let write = |dir: &Path, family: Family, path: &Path| {
             let json =
                 serde_json::json!({ "name": "com.misterdownloadmanager.host", "path": path });
-            std::fs::write(dir.join(MANIFEST), json.to_string()).unwrap();
+            std::fs::write(dir.join(family.host_manifest()), json.to_string()).unwrap();
         };
         let dirs = || vec![(a.clone(), Family::Chromium), (b.clone(), Family::Gecko)];
         assert_eq!(registration_in(vec![], false), Registration::NoBrowser);
         assert_eq!(registration_in(dirs(), false), Registration::Missing);
-        write(&a, &helper);
+        write(&a, Family::Chromium, &helper);
         assert_eq!(
             registration_in(dirs(), false),
             Registration::Missing,
@@ -2344,10 +2343,10 @@ mod host_copy_tests {
             Registration::Ready,
             "everyone's: one is enough"
         );
-        write(&b, &helper);
+        write(&b, Family::Gecko, &helper);
         assert_eq!(registration_in(dirs(), false), Registration::Ready);
         let gone = t.path().join("gone/misterdownloadmanager-nmhost");
-        write(&b, &gone);
+        write(&b, Family::Gecko, &gone);
         assert_eq!(
             registration_in(dirs(), false),
             Registration::HelperMissing(gone.clone())

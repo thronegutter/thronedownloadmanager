@@ -297,13 +297,17 @@ fn zen_and_helium_alone_are_registered() {
         assert!(out.status.success(), "{arg}: {out:?}");
     };
     host("--register");
-    let manifest = |dir: &std::path::Path| -> serde_json::Value {
-        let file = dir.join("com.misterdownloadmanager.host.json");
+    use mdm_ipc::browsers::Family;
+    let manifest = |dir: &std::path::Path, family: Family| -> serde_json::Value {
+        let file = dir.join(family.host_manifest());
         serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap()
     };
-    assert!(manifest(&mozilla_hosts)["allowed_extensions"].is_array());
+    assert_eq!(
+        manifest(&mozilla_hosts, Family::Gecko)["allowed_extensions"],
+        serde_json::json!([mdm_ipc::extension::FIREFOX_ID])
+    );
     // Both copies of the extension connect: the Chrome Web Store's and the app folder's.
-    let origins = manifest(&helium_hosts)["allowed_origins"].clone();
+    let origins = manifest(&helium_hosts, Family::Chromium)["allowed_origins"].clone();
     for id in [
         "ejoleppdfgjdndddcjoehopknmlglojp",
         "oogbclbbninliongijffeeggalppliok",
@@ -312,8 +316,11 @@ fn zen_and_helium_alone_are_registered() {
         assert!(origins.as_array().unwrap().contains(&origin), "{origins}");
     }
     host("--unregister");
-    for dir in [&mozilla_hosts, &helium_hosts] {
-        assert!(!dir.join("com.misterdownloadmanager.host.json").exists());
+    for (dir, family) in [
+        (&mozilla_hosts, Family::Gecko),
+        (&helium_hosts, Family::Chromium),
+    ] {
+        assert!(!dir.join(family.host_manifest()).exists());
     }
     let _ = std::fs::remove_dir_all(&home);
 }

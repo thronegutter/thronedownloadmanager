@@ -15,6 +15,10 @@ $src = Join-Path $root "extension"
 # Joined part by part: .NET (the zips below) takes a backslash literally on Linux and macOS.
 $out = Join-Path (Join-Path $root "target") "extension"
 $cargo = Get-Content (Join-Path $root "Cargo.toml") -Raw
+$ipc = Get-Content -LiteralPath (Join-Path $root "crates/ipc/src/extension.rs") -Raw
+$firefoxHost = [regex]::Match($ipc, 'FIREFOX_HOST_NAME: &str = "([^"]+)"').Groups[1].Value
+if (-not $firefoxHost) { throw "no Firefox native host in crates/ipc/src/extension.rs" }
+$encoding = New-Object Text.UTF8Encoding $false
 $version = [regex]::Match($cargo, '(?m)^version\s*=\s*"([^"]+)"').Groups[1].Value
 if (-not $version) { throw "no version in Cargo.toml" }
 # The stores take one to four dot-separated numbers only (no "-rc.1").
@@ -31,6 +35,32 @@ foreach ($kind in "chromium", "firefox", "safari") {
   Copy-Item (Join-Path $src "icons") (Join-Path $dir "icons") -Recurse
   # Its texts in the browser's language (tools/extension/locales.py).
   Copy-Item (Join-Path $src "_locales") (Join-Path $dir "_locales") -Recurse
+  if ($kind -eq "firefox") {
+    # Use the desktop icon and Throne Blue palette for the Firefox package.
+    $appIcons = Join-Path $root "crates/app/assets/icons/app"
+    foreach ($size in 16, 32, 48, 128) {
+      Copy-Item -LiteralPath (Join-Path $appIcons "mdm-$size.png") (Join-Path $dir "icons/icon-$size.png")
+    }
+    $video = Join-Path $dir "video.js"
+    $videoCode = [IO.File]::ReadAllText($video)
+    $originalLogo = [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $src "icons/icon-48.png")))
+    $throneLogo = [Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $appIcons "mdm-48.png")))
+    if (-not $videoCode.Contains($originalLogo)) { throw "no embedded logo in video.js" }
+    [IO.File]::WriteAllText($video, $videoCode.Replace($originalLogo, $throneLogo), $encoding)
+    $popup = Join-Path $dir "popup.css"
+    $palette = [IO.File]::ReadAllText((Join-Path $src "popup.firefox.css"))
+    [IO.File]::AppendAllText($popup, "`n" + $palette, $encoding)
+    foreach ($file in @((Join-Path $dir "popup.html"), (Join-Path $dir "video.js")) +
+        @(Get-ChildItem -LiteralPath (Join-Path $dir "_locales") -Recurse -Filter "messages.json" | ForEach-Object FullName)) {
+      $text = [IO.File]::ReadAllText($file).Replace("Mister Download Manager", "Throne Download Manager")
+      [IO.File]::WriteAllText($file, $text, $encoding)
+    }
+    $background = Join-Path $dir "background.js"
+    $code = [IO.File]::ReadAllText($background)
+    $hostLine = 'const HOST = "com.misterdownloadmanager.host";'
+    if (-not $code.Contains($hostLine)) { throw "no host declaration in background.js" }
+    [IO.File]::WriteAllText($background, $code.Replace($hostLine, "const HOST = `"$firefoxHost`";"), $encoding)
+  }
   # Norwegian: Chrome takes only "no", Firefox looks for "nb" (Bokmål) as its users' browsers say.
   if ($kind -eq "firefox" -and (Test-Path (Join-Path $dir "_locales/no"))) {
     Copy-Item (Join-Path $dir "_locales/no") (Join-Path $dir "_locales/nb") -Recurse

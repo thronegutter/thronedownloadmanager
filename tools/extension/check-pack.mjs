@@ -15,6 +15,7 @@ const version = cargo.match(/^version\s*=\s*"([^"]+)"/m)[1];
 const ipc = readFileSync(new URL("crates/ipc/src/extension.rs", root), "utf8");
 const unpackedId = ipc.match(/UNPACKED_ID: &str = "([a-p]{32})"/)[1];
 const firefoxId = ipc.match(/FIREFOX_ID: &str = "([^"]+)"/)[1];
+const firefoxHost = ipc.match(/FIREFOX_HOST_NAME: &str = "([^"]+)"/)[1];
 
 // A Chromium extension's ID: the first 32 hex digits of SHA-256 of its public key, 0-f as a-p.
 const idOf = (key) =>
@@ -41,7 +42,18 @@ for (const kind of ["chromium", "chrome-store", "firefox", "safari"]) {
     const video = m.content_scripts.find((c) => c.js.includes("video.js"));
     assert.ok(video && !(video.exclude_matches || []).length, "the video button runs everywhere, YouTube included");
   }
-  if (kind === "firefox") assert.equal(m.browser_specific_settings.gecko.id, firefoxId);
+  if (kind === "firefox") {
+    assert.equal(m.browser_specific_settings.gecko.id, firefoxId);
+    const locales = JSON.parse(readFileSync(new URL("_locales/en/messages.json", dir), "utf8"));
+    assert.equal(locales.name.message, "Throne Download Manager");
+    const videoLogo = readFileSync(new URL("icons/icon-48.png", dir)).toString("base64");
+    assert.ok(readFileSync(new URL("video.js", dir), "utf8").includes(videoLogo), "Firefox's video button uses its packaged logo");
+    assert.ok(readFileSync(new URL("background.js", dir), "utf8").includes(`const HOST = "${firefoxHost}";`));
+    for (const [size, icon] of Object.entries(m.icons)) {
+      const desktop = new URL(`crates/app/assets/icons/app/mdm-${size}.png`, root);
+      assert.deepEqual(readFileSync(new URL(icon, dir)), readFileSync(desktop), `Firefox icon ${size}`);
+    }
+  }
   if (kind === "safari") {
     // page.js tells Safari by this; Safari has no downloads or proxy API to ask permission for.
     assert.ok(m.browser_specific_settings.safari, "page.js knows Safari by its manifest");

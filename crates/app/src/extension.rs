@@ -180,16 +180,12 @@ impl Extension {
         let o = o + egui::vec2(0.0, extra);
 
         // One row per browser: its name, and the button that opens the extension's page in it:
-        // Firefox's on addons.mozilla.org, the Chrome Web Store's for the others (the tutorial
-        // while STORE_ID is a placeholder, as in a build of its own).
+        // Firefox opens the steps for a temporary add-on. Chromium opens its store page when listed.
         let store = mdm_ipc::extension::store_page();
         for (k, (name, program)) in self.browsers.iter().enumerate() {
             let y = BANNER + 16.0 + k as f32 * ROW;
-            let page = if is_gecko(name) {
-                Some(mdm_ipc::extension::FIREFOX_PAGE.to_owned())
-            } else {
-                store.clone()
-            };
+            let gecko = is_gecko(name);
+            let page = if gecko { None } else { store.clone() };
             winui::text_font(
                 &p,
                 winui::tahoma_bold(),
@@ -247,9 +243,13 @@ impl Extension {
                 *open_steps = true;
             } else if add.clicked() {
                 // No store page: the tutorial on the website, in the interface language.
-                let url = page.clone().unwrap_or_else(|| {
-                    crate::help::page_url(mdm_ipc::extension::GUIDE_DOC, crate::i18n::code())
-                });
+                let url = if gecko {
+                    mdm_ipc::extension::FIREFOX_SETUP.to_owned()
+                } else {
+                    page.unwrap_or_else(|| {
+                        crate::help::page_url(mdm_ipc::extension::GUIDE_DOC, crate::i18n::code())
+                    })
+                };
                 let url = url.as_str();
                 match program {
                     #[cfg(windows)]

@@ -49,7 +49,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-export const release = path.join(process.env.CARGO_TARGET_DIR ? path.resolve(process.env.CARGO_TARGET_DIR) : path.join(root, "target"), "release");
+export const release = process.env.E2E_BUILD_DIR ? path.resolve(process.env.E2E_BUILD_DIR)
+  : path.join(process.env.CARGO_TARGET_DIR ? path.resolve(process.env.CARGO_TARGET_DIR) : path.join(root, "target"), "release");
 export const exe = (name) => path.join(release, process.platform === "win32" ? `${name}.exe` : name);
 // E2E_WORK: the run's own folder instead (its profiles, the instance's data and downloads).
 const work = process.env.E2E_WORK ? path.resolve(process.env.E2E_WORK) : path.join(root, "target", "e2e");
@@ -64,7 +65,9 @@ const proxyLog = [];
 const PAC = `function FindProxyForURL(url, host) { return host === "${PROXY_HOST}" ? "PROXY 127.0.0.1:${PROXY_PORT}" : "DIRECT"; }`;
 // The extension's own address in Firefox (moz-extension://UUID/), fixed in the test profile so
 // its pages (the popup) can be opened in a tab.
-const FIREFOX_ID = "integration@misterdownloadmanager.com";
+const extensionIdentity = fs.readFileSync(path.join(root, "crates", "ipc", "src", "extension.rs"), "utf8");
+const FIREFOX_ID = extensionIdentity.match(/FIREFOX_ID: &str = "([^"]+)"/)[1];
+const FIREFOX_HOST = extensionIdentity.match(/FIREFOX_HOST_NAME: &str = "([^"]+)"/)[1];
 // The extensions the browsers load: pack.ps1's, or their copies for E2E_HOST_NAME (testHost).
 let chromiumExtension = path.join(root, "target", "extension", "chromium");
 let firefoxExtension = { type: "archivePath", path: path.join(root, "target", "extension", "mdm-firefox.xpi") };
@@ -1238,6 +1241,44 @@ async function proxyInChromium(t) {
 }
 
 const CASES = {
+  // The popup and the explicit Firefox menu: the add-on sends the URL to the native host
+  // without starting a download in the browser.
+  async "firefox-addon"(t) {
+    const s = t.session;
+    if (!s.inBrowser) throw new Skip("Firefox's family only");
+    const popup = await s.tab(`${s.base}popup.html`);
+    try {
+      await until("the connected Throne popup", 10000, () => popup.evaluate(`
+        document.querySelector("#status").classList.contains("ok")
+      `).catch(() => false));
+      const style = await popup.evaluate(`({
+        name: document.querySelector("header span").textContent,
+        caption: getComputedStyle(document.querySelector("header")).backgroundColor,
+        background: getComputedStyle(document.body).backgroundColor,
+        dark: matchMedia("(prefers-color-scheme: dark)").matches,
+      })`);
+      const expected = style.dark ? "rgb(17, 21, 29)" : "rgb(237, 242, 248)";
+      if (style.name !== "Throne Download Manager" || style.caption !== "rgb(13, 17, 25)" || style.background !== expected) {
+        throw new Error(`the popup did not use Throne Blue: ${JSON.stringify(style)}`);
+      }
+    } finally {
+      await popup.close();
+    }
+    const file = "e2e-throne-firefox.zip";
+    const url = `${LAB}/gen/1M/${file}`;
+    const [x, y] = await s.evaluate(`(() => {
+      const a = Object.assign(document.createElement("a"), { href: ${JSON.stringify(url)}, textContent: "Download test file" });
+      a.style = "position:fixed;top:48px;left:48px;";
+      document.body.append(a);
+      const r = a.getBoundingClientRect();
+      return [Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2)];
+    })()`);
+    const choice = await s.menu(x, y, "Download with Throne Download Manager");
+    if (!choice.startsWith("chosen ")) throw new Error(choice);
+    await arrived(file, 1 << 20);
+    await keptNothing(t.dl);
+    return "Throne Blue popup connected; Firefox's Throne menu handed a 1 MiB file to the app";
+  },
   // #42: the browser behind a proxy (a VPN or proxy extension's). The file's host (lab.mdm.test) is
   // known to that proxy only, so MDM can download it only through the same proxy, which the
   // extension hands over with the download, once the user switched that on: the popup's switch
@@ -1912,7 +1953,7 @@ const REG_KEYS = ["HKCU", "HKLM"].flatMap((root) => [
     "Software\\Microsoft\\Edge\\NativeMessagingHosts",
     "Software\\BraveSoftware\\Brave-Browser\\NativeMessagingHosts",
     "Software\\Mozilla\\NativeMessagingHosts",
-  ].map((k) => [`${root}\\${k}\\${HOST}`, false]),
+  ].map((k) => [`${root}\\${k}\\${k.startsWith("Software\\Mozilla") ? FIREFOX_HOST : HOST}`, false]),
   [`${root}\\Software\\Google\\Chrome\\Extensions`, true],
 ]);
 
@@ -1933,7 +1974,7 @@ function manifestFiles() {
     for (const e of entries) {
       const p = path.join(dir, e.name);
       if (e.isDirectory() && !e.isSymbolicLink() && depth < 6 && !skip.has(e.name)) walk(p, depth + 1);
-      else if (e.name === `${HOST}.json`) found.push(p);
+      else if (e.name === `${HOST}.json` || e.name === `${FIREFOX_HOST}.json`) found.push(p);
     }
   };
   walk(home, 0);
@@ -2009,7 +2050,7 @@ const TEST_HOST_KEYS = {
 };
 function testHost(name, browsers, nmhost) {
   if (!WIN) throw new Error("E2E_HOST_NAME: Windows only");
-  if (!/^[a-z0-9_]+(\.[a-z0-9_]+)+$/.test(name) || name === HOST) throw new Error(`E2E_HOST_NAME: ${name} isn't a test host name`);
+  if (!/^[a-z0-9_]+(\.[a-z0-9_]+)+$/.test(name) || name === HOST || name === FIREFOX_HOST) throw new Error(`E2E_HOST_NAME: ${name} isn't a test host name`);
   const other = browsers.filter((b) => !TEST_HOST_KEYS[b]);
   if (other.length) throw new Error(`E2E_HOST_NAME: not for ${other.join(", ")}`);
   // pack.ps1's folder for `kind`, copied with the test host's name in its background.js.
@@ -2018,7 +2059,8 @@ function testHost(name, browsers, nmhost) {
     fs.cpSync(path.join(root, "target", "extension", kind), dir, { recursive: true });
     const bg = path.join(dir, "background.js");
     const code = fs.readFileSync(bg, "utf8");
-    const renamed = code.replace(`const HOST = "${HOST}";`, `const HOST = ${JSON.stringify(name)};`);
+    const realHost = kind === "firefox" ? FIREFOX_HOST : HOST;
+    const renamed = code.replace(`const HOST = "${realHost}";`, `const HOST = ${JSON.stringify(name)};`);
     if (renamed === code) throw new Error("background.js: its host's name wasn't found");
     fs.writeFileSync(bg, renamed);
     return dir;
@@ -2088,7 +2130,7 @@ async function run() {
   if (process.platform === "win32") {
     const idm = spawnSync("tasklist", ["/FI", "IMAGENAME eq IDMan.exe", "/NH"], { encoding: "utf8" }).stdout;
     idmRunning = /IDMan\.exe/i.test(idm);
-    if (idmRunning && process.env.E2E_IDM_OK !== "1") throw new Error("Internet Download Manager is running: quit it first (it takes the browsers' downloads), or set E2E_IDM_OK=1 if it leaves 127.0.0.1 alone");
+    if (idmRunning && !(only.length === 1 && only[0] === "firefox-addon") && process.env.E2E_IDM_OK !== "1") throw new Error("Internet Download Manager is running: quit it first (it takes the browsers' downloads), or set E2E_IDM_OK=1 if it leaves 127.0.0.1 alone");
   }
   for (const p of [appExe, exe("misterdownloadmanager-nmhost"), exe("labserver")]) {
     if (!fs.existsSync(p)) throw new Error(`build it first: ${p}`);
@@ -2153,7 +2195,7 @@ async function run() {
     // machine's (E2E_REPLACE_HOST=1) may be replaced while the run lasts.
     const key = "HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\com.misterdownloadmanager.host";
     const installed = WIN ? spawnSync("reg", ["query", key], { stdio: "ignore" }).status === 0 : regSnapshot().some((m) => m.bytes) && process.env.E2E_REPLACE_HOST !== "1";
-    if (installed) {
+    if (installed && !process.env.E2E_HOST_NAME) {
       throw new Error("Mister Download Manager's host is already registered (an installed copy): not touching it");
     }
     regBefore = regSnapshot(path.join(work, "registry", "before"));
@@ -2162,7 +2204,7 @@ async function run() {
     } else {
       const reg = spawnSync(nmhost, ["--register"], { encoding: "utf8" });
       // Where it wrote (Linux, macOS), for the restore.
-      written = [...(reg.stdout || "").matchAll(/^registered \S+ in (.+)$/gm)].map((m) => path.join(m[1].trim(), `${HOST}.json`));
+      written = [...(reg.stdout || "").matchAll(/^registered (\S+) in (.+)$/gm)].map((m) => path.join(m[2].trim(), `${m[1]}.json`));
       if (reg.status !== 0) throw new Error(`nmhost --register: ${reg.stderr || reg.stdout}`);
     }
     for (const name of names) {

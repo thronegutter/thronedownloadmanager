@@ -3941,11 +3941,14 @@ pub fn host_registration() -> crate::extension::Registration {
     use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
     let mut broken = None;
     for key in [
-        r"Software\Google\Chrome\NativeMessagingHosts\com.misterdownloadmanager.host",
-        r"Software\Mozilla\NativeMessagingHosts\com.misterdownloadmanager.host",
+        r"Software\Google\Chrome\NativeMessagingHosts\com.misterdownloadmanager.host".to_owned(),
+        format!(
+            r"Software\Mozilla\NativeMessagingHosts\{}",
+            mdm_ipc::extension::FIREFOX_HOST_NAME,
+        ),
     ] {
         for root in [HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE] {
-            let Some(manifest) = reg_string_in(root, key, "") else {
+            let Some(manifest) = reg_string_in(root, &key, "") else {
                 continue;
             };
             let manifest = std::path::PathBuf::from(manifest.trim().trim_matches('"'));

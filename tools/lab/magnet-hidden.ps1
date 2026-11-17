@@ -109,7 +109,7 @@ function Native-Message([hashtable]$Message) {
   try {
     [IO.File]::WriteAllBytes($msg, [BitConverter]::GetBytes([uint32]$json.Length) + $json)
     $manifest = Join-Path (Split-Path $Exe) "firefox-host.json"
-    $p = Start-Process -FilePath "cmd.exe" -PassThru -WindowStyle Hidden -ArgumentList "/d /c `"`"$Host_`" `"$manifest`" integration@misterdownloadmanager.com < `"$msg`" > `"$out`"`""
+    $p = Start-Process -FilePath "cmd.exe" -PassThru -WindowStyle Hidden -ArgumentList "/d /c `"`"$Host_`" `"$manifest`" thronedownloadmanager@thronegutter.github.io < `"$msg`" > `"$out`"`""
     if (-not $p.WaitForExit(15000)) { throw "the native host didn't quit" }
     $bytes = [IO.File]::ReadAllBytes($out)
     if ($bytes.Length -lt 4) { return "(no reply)" }

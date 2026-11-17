@@ -36,7 +36,11 @@ use serde::{Deserialize, Serialize};
 mod win32;
 
 const HOST_NAME: &str = "com.misterdownloadmanager.host";
-use mdm_ipc::extension::{FIREFOX_ID, STORE_ID, STORE_UPDATE_URL, chromium_ids, store_id};
+#[cfg(not(windows))]
+use mdm_ipc::browsers::Family;
+use mdm_ipc::extension::{
+    FIREFOX_HOST_NAME, FIREFOX_ID, STORE_ID, STORE_UPDATE_URL, chromium_ids, store_id,
+};
 /// Where each Chromium browser looks for native messaging hosts on Windows, under HKCU (one
 /// user) or HKLM (everyone). Chromium-branded builds (Chromium, Helium, Thorium, and Brave and
 /// Brave Origin with every channel) read Chromium's first, then Chrome's, as most other forks do
@@ -741,8 +745,8 @@ fn chromium_manifest(program: &std::path::Path) -> serde_json::Value {
 /// Firefox's manifest: the same host, allowed for our add-on ID instead of an origin.
 fn firefox_manifest(program: &std::path::Path) -> serde_json::Value {
     serde_json::json!({
-        "name": HOST_NAME,
-        "description": "Mister Download Manager",
+        "name": FIREFOX_HOST_NAME,
+        "description": "Throne Download Manager",
         "path": program,
         "type": "stdio",
         "allowed_extensions": [FIREFOX_ID],
@@ -801,18 +805,7 @@ fn register(all_users: bool) -> Result<(), String> {
             "/f",
         ])?;
     }
-    let ff_path = exe_dir()?.join(format!("{HOST_NAME}.firefox.json"));
-    write_json(&ff_path, &firefox_manifest(&this_program()?))?;
-    reg(&[
-        "add",
-        &format!(r"{root}\{FIREFOX_KEY}\{HOST_NAME}"),
-        "/ve",
-        "/t",
-        "REG_SZ",
-        "/d",
-        &ff_path.display().to_string(),
-        "/f",
-    ])?;
+    register_firefox(all_users)?;
     // Chrome offers the store's extension once it is listed (never a placeholder ID).
     if let Some(id) = store_id() {
         reg(&[
@@ -830,17 +823,52 @@ fn register(all_users: bool) -> Result<(), String> {
     }
     println!(
         "registered {HOST_NAME} for Chrome, Edge, Brave, Helium and the other Chromium browsers \
-         ({}), and for Firefox, Zen and its other forks ({})",
-        path.display(),
-        ff_path.display()
+         ({})",
+        path.display()
     );
+    Ok(())
+}
+
+/// Windows: register just the Firefox add-on's helper.
+#[cfg(windows)]
+fn register_firefox(all_users: bool) -> Result<(), String> {
+    portable_refused()?;
+    let root = if all_users { "HKLM" } else { "HKCU" };
+    let path = exe_dir()?.join(format!("{FIREFOX_HOST_NAME}.json"));
+    write_json(&path, &firefox_manifest(&this_program()?))?;
+    reg(&[
+        "add",
+        &format!(r"{root}\{FIREFOX_KEY}\{FIREFOX_HOST_NAME}"),
+        "/ve",
+        "/t",
+        "REG_SZ",
+        "/d",
+        &path.display().to_string(),
+        "/f",
+    ])?;
+    println!(
+        "registered {FIREFOX_HOST_NAME} for Firefox ({})",
+        path.display()
+    );
+    Ok(())
+}
+
+#[cfg(windows)]
+fn unregister_firefox(all_users: bool) -> Result<(), String> {
+    let root = if all_users { "HKLM" } else { "HKCU" };
+    let _ = reg(&[
+        "delete",
+        &format!(r"{root}\{FIREFOX_KEY}\{FIREFOX_HOST_NAME}"),
+        "/f",
+    ]);
+    let _ = std::fs::remove_file(exe_dir()?.join(format!("{FIREFOX_HOST_NAME}.json")));
     Ok(())
 }
 
 #[cfg(windows)]
 fn unregister(all_users: bool) -> Result<(), String> {
     let root = if all_users { "HKLM" } else { "HKCU" };
-    for key in REGISTRY_KEYS.into_iter().chain([FIREFOX_KEY]) {
+    for key in REGISTRY_KEYS {
         let _ = reg(&["delete", &format!(r"{root}\{key}\{HOST_NAME}"), "/f"]);
     }
     let _ = reg(&[
@@ -850,7 +878,7 @@ fn unregister(all_users: bool) -> Result<(), String> {
         "/reg:32",
     ]);
     let _ = std::fs::remove_file(exe_dir()?.join(format!("{HOST_NAME}.json")));
-    let _ = std::fs::remove_file(exe_dir()?.join(format!("{HOST_NAME}.firefox.json")));
+    unregister_firefox(all_users)?;
     println!("unregistered {HOST_NAME}");
     Ok(())
 }
@@ -873,16 +901,13 @@ fn reg(args: &[&str]) -> Result<(), String> {
 /// With `host`, a user's folder is left out for a browser that reads a manifest for everyone
 /// naming it (the package's, #266).
 #[cfg(not(windows))]
-fn host_dirs(all_users: bool, host: Option<&std::path::Path>) -> Vec<(PathBuf, bool)> {
+fn host_dirs(all_users: bool, host: Option<&std::path::Path>) -> Vec<(PathBuf, Family)> {
     let home = PathBuf::from(std::env::var_os("HOME").unwrap_or_default());
     let config = std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .filter(|p| p.is_absolute())
         .unwrap_or_else(|| home.join(".config"));
     mdm_ipc::browsers::host_dirs(&home, &config, cfg!(target_os = "macos"), all_users, host)
-        .into_iter()
-        .map(|(d, f)| (d, f == mdm_ipc::browsers::Family::Gecko))
-        .collect()
 }
 
 /// Linux and macOS: the folder Chrome reads external extensions from (an `<id>.json` naming
@@ -943,12 +968,12 @@ fn register(all_users: bool) -> Result<(), String> {
     // registered last is the one the browsers start, as when each wrote its own.
     let mut covered = 0;
     if !all_users {
-        for (dir, _) in host_dirs(false, None) {
+        for (dir, family) in host_dirs(false, None) {
             if dirs.iter().any(|(d, _)| *d == dir) {
                 continue;
             }
             covered += 1;
-            let manifest = dir.join(format!("{HOST_NAME}.json"));
+            let manifest = dir.join(family.host_manifest());
             if std::fs::remove_file(&manifest).is_ok() {
                 println!(
                     "removed {} (the browser reads the one for everyone)",
@@ -965,13 +990,21 @@ fn register(all_users: bool) -> Result<(), String> {
     }
     // One browser's folder that can't be written doesn't keep the others from theirs.
     let mut failed = Vec::new();
-    for (dir, is_firefox) in &dirs {
-        let manifest = if *is_firefox { &firefox } else { &chromium };
+    for (dir, family) in &dirs {
+        let manifest = match family {
+            Family::Chromium => &chromium,
+            Family::Gecko => &firefox,
+        };
+        let path = dir.join(family.host_manifest());
         let written = std::fs::create_dir_all(dir)
             .map_err(|e| format!("{}: {e}", dir.display()))
-            .and_then(|()| write_json(&dir.join(format!("{HOST_NAME}.json")), manifest));
+            .and_then(|()| write_json(&path, manifest));
         match written {
-            Ok(()) => println!("registered {HOST_NAME} in {}", dir.display()),
+            Ok(()) => println!(
+                "registered {} in {}",
+                manifest["name"].as_str().unwrap(),
+                dir.display()
+            ),
             Err(e) => failed.push(e),
         }
     }
@@ -994,8 +1027,8 @@ fn register(all_users: bool) -> Result<(), String> {
 
 #[cfg(not(windows))]
 fn unregister(all_users: bool) -> Result<(), String> {
-    for (dir, _) in host_dirs(all_users, None) {
-        let _ = std::fs::remove_file(dir.join(format!("{HOST_NAME}.json")));
+    for (dir, family) in host_dirs(all_users, None) {
+        let _ = std::fs::remove_file(dir.join(family.host_manifest()));
     }
     if let Some(dir) = chrome_external_dir(all_users) {
         let _ = std::fs::remove_file(dir.join(format!("{STORE_ID}.json")));
@@ -1023,7 +1056,7 @@ fn package_manifests(root: Option<&str>) -> Result<(), String> {
             mdm_ipc::browsers::Family::Chromium => chromium_manifest(program),
             mdm_ipc::browsers::Family::Gecko => firefox_manifest(program),
         };
-        let path = dir.join(format!("{HOST_NAME}.json"));
+        let path = dir.join(family.host_manifest());
         write_json(&path, &manifest)?;
         println!("{}", path.display());
     }
@@ -1043,6 +1076,10 @@ fn main() {
     let result = match args.first().map(String::as_str).unwrap_or_default() {
         "--register" => register(all_users),
         "--unregister" => unregister(all_users),
+        #[cfg(windows)]
+        "--register-firefox" => register_firefox(all_users),
+        #[cfg(windows)]
+        "--unregister-firefox" => unregister_firefox(all_users),
         "--package-manifests" => package_manifests(args.get(1).map(String::as_str)),
         // Safari's extension has no host manifest: its app extension (tools/safari) starts this
         // program from inside the app, which is the only caller there is.

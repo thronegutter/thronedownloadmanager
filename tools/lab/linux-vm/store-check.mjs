@@ -14,7 +14,7 @@ import { spawn, execFileSync } from "node:child_process";
 const [browser, pkg] = [process.argv[2], path.resolve(process.argv[3])];
 const LAB = process.argv[4] || "http://127.0.0.1:8097";
 const OUT = path.resolve(process.argv[5] || path.join(process.env.HOME, "lab/store-check"));
-const ID = "integration@misterdownloadmanager.com";
+const ID = "thronedownloadmanager@thronegutter.github.io";
 const UUID = "5d0c3b8e-7a51-4c1e-9f0a-38e2c4a1d7b6";
 const NL = String.fromCharCode(10);
 const NUL = String.fromCharCode(0);
